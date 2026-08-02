@@ -47,7 +47,7 @@ cd <name>
 cargo build --release
 ```
 
-All of them default to the `claude` CLI as the LLM backend (a subprocess call, `claude -p --output-format json` — no separate API key needed if you already use Claude Code), with an OpenRouter backend as an alternative or, in `icon-loop`'s case, as a second panel member for judge diversity. Each repo's own `README.md` has the actual subcommands and a real example invocation — start there.
+All of them default to the `claude` CLI as the LLM backend (a subprocess call, `claude -p --output-format json` — no separate API key needed if you already use Claude Code), with an OpenRouter backend as an alternative or, in `icon-loop` and `store-creative-loop`, as a second panel member for judge diversity. Each repo's own `README.md` has the actual subcommands and a real example invocation — start there.
 
 ## Projects
 
@@ -62,6 +62,7 @@ All of them default to the `claude` CLI as the LLM backend (a subprocess call, `
 | **[research-loop](https://github.com/Loop-Suite/research-loop)** | Market/competitor research document validation | public. Motivated by a real multi-round POS-competitor research doc; catches quantitative-vs-qualitative disagreement, a subject's own marketing dominating its citations, incentivized reviews, numeric drift across drafts, and prior conclusions overturned by newer evidence (`REVERSED` status). Source-level re-verification of GPT Researcher/company-research-agent/MetaGPT is in its evidence survey. |
 | **[secretscan-loop](https://github.com/Loop-Suite/secretscan-loop)** | Pre-push/pre-publish secret-scanner-finding triage | public, **known issue**: masking is per-match, not per-line — a second secret sharing a line with the first candidate can still reach the LLM context ([issue](https://github.com/Loop-Suite/secretscan-loop/issues/4)). Domain already has mature deterministic scanners (gitleaks/trufflehog) — the discourse layer triages *their* output, but currently LLM discourse can also downgrade a scanner-verified secret to PASS ([issue](https://github.com/Loop-Suite/secretscan-loop/issues/3)). Do not point this at a repo with real live secrets until those are fixed. |
 | **[icon-loop](https://github.com/Loop-Suite/icon-loop)** | App icon (vector) design | public. Discourse variant — critics are fully independent and blind (no sequential AGREE/CHALLENGE exposure), aggregated with a deterministic Borda count instead; also flags unanimous agreement (possible collusion) and surfaces minority opinions a naive aggregate would bury. Critic backends can mix claude/openrouter so the panel isn't just the same model called N times. Rendering is pure Rust (resvg/usvg/tiny-skia, no external binary), and policy.rs checks canvas containment/palette/small-size legibility against the actual rendered pixels, not the raw SVG source. |
+| **[store-creative-loop](https://github.com/Loop-Suite/store-creative-loop)** | App-store screenshot sets and feature graphics | public. Reviews complete Apple/Google, phone/tablet, and locale-specific candidate sets produced by any upstream design tool. Deterministic gates verify decoding, dimensions, asset counts, actual alpha, platform limits, hashes, and duplicates before anonymous per-target contact sheets reach fully independent visual critics. Cyclic presentation order, Borda aggregation, provider/unanimity warnings, minority opinions, and two-reviewer risk corroboration produce an **offline recommendation only**; `experiment.md` hands the treatment to Apple Product Page Optimization or Google Play Store Listing Experiments for external validation. |
 
 ## Pipelines
 
@@ -224,6 +225,21 @@ flowchart LR
     H -.->|"refine --prior<br/>(--no-critique for ablation)"| B
 ```
 
+### store-creative-loop
+
+This is a review-and-learning loop, not another screenshot generator. It accepts ordered creative sets from any renderer, blocks objectively invalid store assets before judgment, then keeps model review and market validation as two explicitly different stages.
+
+```mermaid
+flowchart LR
+    A["target spec + candidate sets<br/>Apple / Google · phone / tablet · locales"] --> B["discover.rs + deterministic gates<br/>decode / size / count / alpha / hashes / duplicates"]
+    B --> C["contact_sheet.rs<br/>anonymous per-target thumbnail sheets"]
+    C --> D["critique.rs: independent visual critics<br/>cyclic candidate order · no cross-exposure<br/>claude/openrouter provider mix"]
+    D --> E["quantify.rs: hard-gate exclusion + Borda<br/>dissent / correlation warnings<br/>2-reviewer corroborated risks"]
+    E --> F["report.md<br/>offline recommendation only"]
+    F --> G["experiment.md<br/>Apple PPO / Google listing experiment"]
+    G -.->|"refine --prior<br/>STILL_OPEN / NEW / NOT_REOBSERVED"| A
+```
+
 ### Code-Review-Loop → `harness/` (the benchmark — different shape entirely)
 
 Not the Rust pipeline above. A Node.js harness, bundled under `harness/` in the same repo, that benchmarks the separate `full-review` Claude Code skill against known-mutation fixtures.
@@ -243,7 +259,7 @@ flowchart LR
 - **Rust CLI**, defaulting to the Claude Code CLI (`claude -p --output-format json`) as a subprocess backend — no separate API key required. An OpenRouter backend is also supported.
 - **Deterministic logic and LLM judgment are split at the code level.** Scoring, policy checks, and verdicts are computed locally and deterministically; the LLM only handles judgment-dependent steps like lens selection, review, discourse, and requirement verification.
 - **Anonymized cross-verification**: reviewer identity is stripped before discourse, so agreement/disagreement is forced to run on claims and evidence rather than persona authority.
-- Re-running with `--prior` tracks FIXED / STILL_OPEN / UNKNOWN against the previous round (except bizplan-loop and its aso-loop/geo-loop/seo-loop siblings, which are generate-and-score rather than review-based). Domain-specific extensions add extra states where FIXED/STILL_OPEN/UNKNOWN don't cover the failure mode: research-loop adds `REVERSED` (a prior conclusion overturned by newer evidence, not just updated), secretscan-loop adds `ROTATED` (the string is still physically present but the credential itself was rotated/revoked).
+- Re-running with `--prior` tracks prior observations instead of starting from a clean slate (except bizplan-loop and its aso-loop/geo-loop/seo-loop siblings, which are generate-and-score rather than review-based). Domain-specific state vocabularies reflect what the evidence can actually establish: research-loop adds `REVERSED` (a prior conclusion overturned by newer evidence, not just updated), secretscan-loop adds `ROTATED` (the string is still physically present but the credential itself was rotated/revoked), and store-creative-loop uses `STILL_OPEN` / `NEW` / `NOT_REOBSERVED`—deliberately never upgrading a finding to `FIXED` merely because a new model panel did not reproduce it.
 - Where a project reuses logic from outside Loop-Suite (e.g. aso-loop/geo-loop/seo-loop porting small algorithms from MIT-licensed tools, or citing public guidelines like Google Search Central's structured-data docs), the source is cited in that repo's `NOTICE`/`README.md` — never copied from code without a compatible license.
 
 ## What "deterministic verdict" doesn't mean
@@ -256,4 +272,4 @@ Every repo listed above is Apache-2.0 — see each repo's own `LICENSE`.
 
 ---
 
-[Code-Review-Loop](https://github.com/Loop-Suite/Code-Review-Loop), [marketing-loop](https://github.com/Loop-Suite/marketing-loop), [bizplan-loop](https://github.com/Loop-Suite/bizplan-loop), [aso-loop](https://github.com/Loop-Suite/aso-loop), [geo-loop](https://github.com/Loop-Suite/geo-loop), [seo-loop](https://github.com/Loop-Suite/seo-loop), [research-loop](https://github.com/Loop-Suite/research-loop), [secretscan-loop](https://github.com/Loop-Suite/secretscan-loop), and [icon-loop](https://github.com/Loop-Suite/icon-loop) are public today. One more (pre-code design/architecture review domain) stays private for now.
+[Code-Review-Loop](https://github.com/Loop-Suite/Code-Review-Loop), [marketing-loop](https://github.com/Loop-Suite/marketing-loop), [bizplan-loop](https://github.com/Loop-Suite/bizplan-loop), [aso-loop](https://github.com/Loop-Suite/aso-loop), [geo-loop](https://github.com/Loop-Suite/geo-loop), [seo-loop](https://github.com/Loop-Suite/seo-loop), [research-loop](https://github.com/Loop-Suite/research-loop), [secretscan-loop](https://github.com/Loop-Suite/secretscan-loop), [icon-loop](https://github.com/Loop-Suite/icon-loop), and [store-creative-loop](https://github.com/Loop-Suite/store-creative-loop) are public today. One more (pre-code design/architecture review domain) stays private for now.
