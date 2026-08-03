@@ -62,7 +62,7 @@ All of them default to the `claude` CLI as the LLM backend (a subprocess call, `
 | **[research-loop](https://github.com/Loop-Suite/research-loop)** | Market/competitor research document validation | public. Motivated by a real multi-round POS-competitor research doc; catches quantitative-vs-qualitative disagreement, a subject's own marketing dominating its citations, incentivized reviews, numeric drift across drafts, and prior conclusions overturned by newer evidence (`REVERSED` status). Source-level re-verification of GPT Researcher/company-research-agent/MetaGPT is in its evidence survey. |
 | **[secretscan-loop](https://github.com/Loop-Suite/secretscan-loop)** | Pre-push/pre-publish secret-scanner-finding triage | public, **known issue**: masking is per-match, not per-line — a second secret sharing a line with the first candidate can still reach the LLM context ([issue](https://github.com/Loop-Suite/secretscan-loop/issues/4)). Domain already has mature deterministic scanners (gitleaks/trufflehog) — the discourse layer triages *their* output, but currently LLM discourse can also downgrade a scanner-verified secret to PASS ([issue](https://github.com/Loop-Suite/secretscan-loop/issues/3)). Do not point this at a repo with real live secrets until those are fixed. |
 | **[icon-loop](https://github.com/Loop-Suite/icon-loop)** | App icon (vector) design | public. Discourse variant — critics are fully independent and blind (no sequential AGREE/CHALLENGE exposure), aggregated with a deterministic Borda count instead; also flags unanimous agreement (possible collusion) and surfaces minority opinions a naive aggregate would bury. Critic backends can mix claude/openrouter so the panel isn't just the same model called N times. Rendering is pure Rust (resvg/usvg/tiny-skia, no external binary), and policy.rs checks canvas containment/palette/small-size legibility against the actual rendered pixels, not the raw SVG source. |
-| **[store-creative-loop](https://github.com/Loop-Suite/store-creative-loop)** | App-store screenshot sets and feature graphics | public. Reviews complete Apple/Google, phone/tablet, and locale-specific candidate sets produced by any upstream design tool. Deterministic gates verify decoding, dimensions, asset counts, actual alpha, platform limits, hashes, and duplicates before anonymous per-target contact sheets reach fully independent visual critics. Cyclic presentation order, Borda aggregation, provider/unanimity warnings, minority opinions, and two-reviewer risk corroboration produce an **offline recommendation only**; `experiment.md` hands the treatment to Apple Product Page Optimization or Google Play Store Listing Experiments for external validation. |
+| **[store-creative-loop](https://github.com/Loop-Suite/store-creative-loop)** | App-store screenshot sets and feature graphics | public. Generates real Apple/Google phone, tablet, and feature-graphic PNGs from ordered raw app captures. A model proposes editable creative plans; local Rust code renders exact target canvases, rejects invalid assets, builds anonymous contact sheets, and aggregates fully independent visual critics. The winning plan and concrete risks feed the next generation round. The final set remains an **offline recommendation only**; `experiment.md` hands it to Apple Product Page Optimization or Google Play Store Listing Experiments. |
 
 ## Pipelines
 
@@ -227,17 +227,19 @@ flowchart LR
 
 ### store-creative-loop
 
-This is a review-and-learning loop, not another screenshot generator. It accepts ordered creative sets from any renderer, blocks objectively invalid store assets before judgment, then keeps model review and market validation as two explicitly different stages.
+This is a screenshot generation-and-learning loop. It turns ordered raw app captures into multi-device store PNGs, blocks objectively invalid exports, evaluates variants blindly, and sends the selected plan plus observed weaknesses into the next rendering round. Existing external renderers can still enter directly at validation or review. Model-assisted selection and market validation remain two explicitly different stages.
 
 ```mermaid
 flowchart LR
-    A["target spec + candidate sets<br/>Apple / Google · phone / tablet · locales"] --> B["discover.rs + deterministic gates<br/>decode / size / count / alpha / hashes / duplicates"]
-    B --> C["contact_sheet.rs<br/>anonymous per-target thumbnail sheets"]
-    C --> D["critique.rs: independent visual critics<br/>cyclic candidate order · no cross-exposure<br/>claude/openrouter provider mix"]
-    D --> E["quantify.rs: hard-gate exclusion + Borda<br/>dissent / correlation warnings<br/>2-reviewer corroborated risks"]
-    E --> F["report.md<br/>offline recommendation only"]
-    F --> G["experiment.md<br/>Apple PPO / Google listing experiment"]
-    G -.->|"refine --prior<br/>STILL_OPEN / NEW / NOT_REOBSERVED"| A
+    A["raw app captures + product truth<br/>target spec · palette · style"] --> B["generation.rs: N editable plans<br/>copy / order / layout / color"]
+    B --> C["deterministic renderer<br/>phone / tablet / feature graphic PNGs"]
+    C --> D["discover.rs: policy gates<br/>decode / size / count / alpha / hashes"]
+    D --> E["contact_sheet.rs<br/>anonymous per-target thumbnail sheets"]
+    E --> F["critique.rs: independent visual critics<br/>cyclic order · no cross-exposure"]
+    F --> G["quantify.rs: Borda + criterion means<br/>dissent + corroborated risks"]
+    G --> H["winner plan + concrete feedback"]
+    H -.->|"next generation iteration"| B
+    H --> I["final PNG set + experiment.md<br/>offline recommendation only"]
 ```
 
 ### Code-Review-Loop → `harness/` (the benchmark — different shape entirely)
